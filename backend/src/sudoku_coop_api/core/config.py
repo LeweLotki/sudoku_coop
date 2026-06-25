@@ -1,15 +1,38 @@
-"""Application settings (placeholder).
+"""Application settings.
 
-TODO: Implement environment-driven settings in a future change. Planned values:
-  - APP_NAME: human-readable application name
-  - ENVIRONMENT: e.g. "development" | "production"
-  - ALLOWED_ORIGINS: list of CORS origins (the extension origin(s))
-  - SESSION_CODE_LENGTH: length of generated session codes (4-6)
-
-Intended approach: a ``pydantic_settings.BaseSettings`` subclass loading from the
-environment / a ``.env`` file. Not implemented yet (scaffolding only).
+Environment-driven configuration loaded from the process environment and an
+optional ``.env`` file. Values can be overridden per environment without code
+changes.
 """
 
-# TODO: from pydantic_settings import BaseSettings
-# TODO: class Settings(BaseSettings): ...
-# TODO: settings = Settings()
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Uppercase alphanumeric alphabet for session codes, excluding ambiguous
+# characters (no O/0, I/1) to keep codes easy to read and share aloud.
+DEFAULT_SESSION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+class Settings(BaseSettings):
+    """Runtime settings for the SudokuPad coop backend."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_name: str = "sudoku-coop-api"
+    environment: str = "development"
+
+    # Comma-separated list in the environment (e.g. the extension origin(s)).
+    allowed_origins: list[str] = ["http://localhost:5173"]
+
+    session_code_length: int = 4
+    session_code_alphabet: str = DEFAULT_SESSION_CODE_ALPHABET
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+
+settings = Settings()

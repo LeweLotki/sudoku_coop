@@ -1,13 +1,35 @@
-"""Session domain models (placeholder).
+"""In-memory session domain models.
 
-TODO: Define models in a future change. Planned types:
-  - Session: sessionId, host connection, guest connections
-  - HostConnection: the single host socket for a session
-  - GuestConnection: a guest socket participating in a session
-
-These may be dataclasses or pydantic models. No functional behavior yet
-(scaffolding only).
+These models hold live WebSocket connections and are never persisted. The
+``Connection`` protocol keeps the domain decoupled from FastAPI/Starlette so the
+service can be unit-tested with simple fakes.
 """
 
-# TODO: @dataclass class Session: ...
-# TODO: class HostConnection / GuestConnection: ...
+from __future__ import annotations
+
+import enum
+from dataclasses import dataclass, field
+from typing import Any, Protocol, runtime_checkable
+
+
+class Role(enum.StrEnum):
+    HOST = "host"
+    GUEST = "guest"
+
+
+@runtime_checkable
+class Connection(Protocol):
+    """Minimal interface required of a WebSocket connection."""
+
+    async def send_json(self, data: Any) -> None: ...
+
+
+@dataclass
+class Session:
+    """A single coordination session held entirely in memory."""
+
+    session_id: str
+    host: Connection
+    created_at: float
+    last_activity_at: float
+    guests: set[Connection] = field(default_factory=set)

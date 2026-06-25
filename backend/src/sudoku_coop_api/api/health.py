@@ -1,9 +1,11 @@
-"""Health check endpoint (placeholder).
+"""Health check endpoint."""
 
-TODO: Implement a simple health router in a future change, e.g. a GET ``/health``
-returning ``{"status": "ok"}``. No functional behavior yet (scaffolding only).
-"""
+from fastapi import APIRouter
 
-# TODO: from fastapi import APIRouter
-# TODO: router = APIRouter()
-# TODO: @router.get("/health") ...
+router = APIRouter()
+
+
+@router.get("/health")
+async def health() -> dict[str, str]:
+    """Liveness probe returning a simple status payload."""
+    return {"status": "ok"}
