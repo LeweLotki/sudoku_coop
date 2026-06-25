@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Sudoku Coop",
+  "version": "0.1.0",
+  "description": "Coordinate on SudokuPad puzzles in real time (scaffold only).",
+  "permissions": ["storage", "tabs", "activeTab"],
+  "host_permissions": ["https://sudokupad.app/*"],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Sudoku Coop"
+  },
+  "background": {
+    "service_worker": "src/background/serviceWorker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://sudokupad.app/*"],
+      "js": ["src/content/content.ts"],
+      "run_at": "document_idle"
+    }
+  ]
+}

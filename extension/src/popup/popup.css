@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Popup base styles. Scaffold only. */
+body {
+  min-width: 20rem;
+  margin: 0;
+}

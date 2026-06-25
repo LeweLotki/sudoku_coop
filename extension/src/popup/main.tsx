@@ -1,0 +1,14 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { Popup } from "./Popup";
+import "./popup.css";
+
+// Popup entry point. Scaffold only — renders the placeholder Popup component.
+const container = document.getElementById("root");
+if (container) {
+  createRoot(container).render(
+    <StrictMode>
+      <Popup />
+    </StrictMode>,
+  );
+}
