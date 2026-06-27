@@ -5,8 +5,10 @@ optional ``.env`` file. Values can be overridden per environment without code
 changes.
 """
 
+from typing import Annotated
+
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Uppercase alphanumeric alphabet for session codes, excluding ambiguous
 # characters (no O/0, I/1) to keep codes easy to read and share aloud.
@@ -22,7 +24,9 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # Comma-separated list in the environment (e.g. the extension origin(s)).
-    allowed_origins: list[str] = ["http://localhost:5173"]
+    # NoDecode disables pydantic-settings' default JSON parsing so the
+    # comma-splitting validator below receives the raw string instead.
+    allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
     # --- Security ---
     # Invite-style access token required on every /ws connection. Empty is only
@@ -33,7 +37,7 @@ class Settings(BaseSettings):
     # Extra WebSocket Origins allowed beyond the chrome-extension:// scheme.
     # Comma-separated in the environment. Web-page origins not listed here are
     # rejected to mitigate cross-site WebSocket hijacking.
-    allowed_ws_origins: list[str] = []
+    allowed_ws_origins: Annotated[list[str], NoDecode] = []
 
     session_code_length: int = 8
     session_code_alphabet: str = DEFAULT_SESSION_CODE_ALPHABET
