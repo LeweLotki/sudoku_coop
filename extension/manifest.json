@@ -6,6 +6,7 @@
   "permissions": ["storage", "tabs", "activeTab", "scripting"],
   "host_permissions": [
     "https://sudokupad.app/*",
+    "wss://*.herokuapp.com/*",
     "ws://localhost:8000/*",
     "http://localhost:8000/*"
   ],

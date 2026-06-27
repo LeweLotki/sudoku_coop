@@ -25,6 +25,15 @@ def test_code_uses_configured_length() -> None:
     assert len(session.session_id) == 6
 
 
+def test_default_code_is_eight_characters_from_alphabet() -> None:
+    # No explicit length: falls back to the configured default (8).
+    service = SessionService()
+    session = asyncio.run(service.create_session(FakeConnection()))
+
+    assert len(session.session_id) == 8
+    assert all(char in ALPHABET for char in session.session_id)
+
+
 def test_unique_code_retries_on_collision() -> None:
     # The factory yields a duplicate first, forcing a deterministic retry.
     codes = iter(["AAAA", "AAAA", "BBBB"])

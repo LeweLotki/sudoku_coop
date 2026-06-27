@@ -50,8 +50,20 @@ uv run mypy
 All clients connect to a single endpoint and identify their role via JSON events:
 
 ```
-ws://localhost:8000/ws
+ws://localhost:8000/ws?token=<ACCESS_TOKEN>      # local development
+wss://<your-app>.herokuapp.com/ws?token=<TOKEN>  # production
 ```
+
+Every connection is gated **before** any application message is processed:
+
+- the `token` query parameter must equal the configured `ACCESS_TOKEN`
+  (compared in constant time; the token is never logged), and
+- the `Origin` header must be the extension (`chrome-extension://…`), absent
+  (non-browser clients), or listed in `ALLOWED_WS_ORIGINS`.
+
+Rejected connections are closed with application close code `4401`. In
+development an empty `ACCESS_TOKEN` leaves the gate open for convenience; any
+non-`development` `ENVIRONMENT` with an empty `ACCESS_TOKEN` fails to start.
 
 ### Event protocol
 
@@ -64,8 +76,11 @@ ws://localhost:8000/ws
 { "type": "session:created", "sessionId": "AB12" }
 ```
 
-Session codes are short, uppercase, and exclude ambiguous characters (no `O/0`,
-`I/1`). Default length is 4 (configurable via `SESSION_CODE_LENGTH`).
+Session codes are uppercase and exclude ambiguous characters (no `O/0`,
+`I/1`). Default length is 8 (configurable via `SESSION_CODE_LENGTH`). Sessions
+expire after `SESSION_TTL_SECONDS` of inactivity; expired sessions are removed
+lazily and join/highlight attempts against them return
+`{ "type": "session:error", "message": "Session expired" }`.
 
 **Guest joins a session**
 
@@ -101,12 +116,39 @@ Session codes are short, uppercase, and exclude ambiguous characters (no `O/0`,
 
 ## Configuration
 
-Settings load from the environment and an optional `.env` file (see `.env.example`):
+Settings load from the environment and an optional `.env` file (see
+`.env.example`). **Do not commit your real `.env`.**
 
-- `APP_NAME`
-- `ENVIRONMENT`
-- `ALLOWED_ORIGINS` (comma-separated CORS origins)
-- `SESSION_CODE_LENGTH` (default `4`)
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `APP_NAME` | `sudoku-coop-api` | App title |
+| `ENVIRONMENT` | `development` | Non-`development` requires `ACCESS_TOKEN` |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS origins (HTTP) |
+| `ACCESS_TOKEN` | _(empty)_ | Invite token required on `/ws` (never logged) |
+| `ALLOWED_WS_ORIGINS` | _(empty)_ | Extra allowed WebSocket origins (CSWSH defense) |
+| `SESSION_CODE_LENGTH` | `8` | Session code length |
+| `SESSION_TTL_SECONDS` | `7200` | Session inactivity TTL (lazy cleanup) |
+| `MAX_MESSAGES_PER_10_SECONDS` | `30` | Per-connection message rate |
+| `MAX_INVALID_MESSAGES_PER_CONNECTION` | `10` | Invalid messages before close |
+| `MAX_MESSAGE_BYTES` | `2048` | Max inbound message size |
+| `MAX_ACTIVE_SESSIONS` | `50` | Global active-session cap |
+| `MAX_GUESTS_PER_SESSION` | `5` | Guests per session cap |
+
+### Security model
+
+The access token is an **invite token, not a true secret**: it keeps random
+internet users off the endpoint, and it ends up bundled into the distributed
+extension zip (readable by anyone with the zip). Treat it accordingly — serve
+production over `wss://` and **rotate the Heroku `ACCESS_TOKEN` (and rebuild the
+extension) if the zip leaks**. Security-relevant events are logged at a high
+level only; the token value and full raw message bodies are never logged.
+
+### Heroku deployment (one dyno)
+
+Sessions live entirely in-memory in a single process, so deploy with **exactly
+one web dyno** — running multiple dynos would split sessions across processes
+and break joins. Set the config vars above (notably a long random `ACCESS_TOKEN`)
+and do not enable autoscaling.
 
 ## Manual test scenario
 
@@ -114,8 +156,9 @@ Settings load from the environment and an optional `.env` file (see `.env.exampl
 uv run uvicorn sudoku_coop_api.main:app --reload
 ```
 
-1. Connect a host client to `ws://localhost:8000/ws` and send
+1. Connect a host client to `ws://localhost:8000/ws?token=<ACCESS_TOKEN>` and send
    `{ "type": "session:create", "role": "host" }`; note the returned `sessionId`.
+   (A missing/incorrect token is rejected with close code `4401`.)
 2. Connect a guest client to the same URL and send
    `{ "type": "session:join", "role": "guest", "sessionId": "<code>" }`.
 3. From the guest, send
@@ -130,8 +173,9 @@ backend/
 ├── .env.example
 ├── src/
 │   └── sudoku_coop_api/
-│       ├── main.py                    # FastAPI app: CORS, /health, /ws
+│       ├── main.py                    # FastAPI app: CORS, /health, /ws (token+origin gate)
 │       ├── core/config.py             # settings
+│       ├── core/security.py           # token / origin validation helpers
 │       ├── websocket/
 │       │   ├── connection_manager.py  # per-connection lifecycle + dispatch
 │       │   └── events.py              # event constants, parsing, builders

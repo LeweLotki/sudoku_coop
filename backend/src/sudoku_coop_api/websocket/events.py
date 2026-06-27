@@ -26,6 +26,14 @@ SESSION_CLOSED = "session:closed"
 MIN_INDEX = 1
 MAX_INDEX = 9
 
+# --- Standard error messages (surfaced via session:error) ---
+ERROR_SESSION_EXPIRED = "Session expired"
+ERROR_MESSAGE_TOO_LARGE = "Message too large"
+ERROR_RATE_LIMIT = "Rate limit exceeded"
+ERROR_TOO_MANY_INVALID = "Too many invalid messages"
+ERROR_SESSION_FULL = "Session is full"
+ERROR_TOO_MANY_SESSIONS = "Too many active sessions"
+
 
 class EventError(Exception):
     """Raised for anticipated protocol failures.

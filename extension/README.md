@@ -55,12 +55,31 @@ npm run dev
 
 ## Configuration
 
-The backend WebSocket URL lives in a single place:
+The backend connection lives in a single place (`src/shared/config.ts`) and is
+driven by build-time Vite env variables, so a production build can target
+`wss://` without code changes. Create an untracked `.env` (or `.env.production`)
+in `extension/` — `.env.*` is already gitignored, so **never commit a real
+token**:
 
-```ts
-// src/shared/config.ts
-export const DEFAULT_BACKEND_WS_URL = "ws://localhost:8000/ws";
+```bash
+# extension/.env  (local development — both optional)
+VITE_BACKEND_WS_URL=ws://localhost:8000/ws
+VITE_ACCESS_TOKEN=change-me-local-dev-token
+
+# extension/.env.production  (production build)
+VITE_BACKEND_WS_URL=wss://your-app.herokuapp.com/ws
+VITE_ACCESS_TOKEN=<the-invite-token>
 ```
+
+- `VITE_BACKEND_WS_URL` defaults to `ws://localhost:8000/ws` when unset.
+- `VITE_ACCESS_TOKEN` is appended to the WebSocket URL as `?token=...` by
+  `buildBackendUrl()`. It is **bundled into the built extension** and is also
+  never written to `chrome.storage.local`.
+
+> **Invite token, not a secret.** The token only keeps random internet users off
+> the backend. Anyone with the zip can read it. If the zip is shared publicly or
+> leaks, **rotate the backend `ACCESS_TOKEN` (Heroku config var) and rebuild +
+> redistribute the extension** with the new `VITE_ACCESS_TOKEN`.
 
 ## Build output
 
@@ -83,14 +102,16 @@ self-contained, loadable extension in `dist/`:
 
 ## Running the backend
 
-The extension expects the FastAPI backend on `ws://localhost:8000/ws`:
+The extension expects the FastAPI backend on `ws://localhost:8000/ws` (with a
+matching `token` if `ACCESS_TOKEN` is configured there):
 
 ```bash
 cd ../backend
 uv run uvicorn sudoku_coop_api.main:app --reload
 ```
 
-See `backend/README.md` for full backend commands.
+See `backend/README.md` for full backend commands. The backend keeps sessions
+in-memory, so production must run on **exactly one Heroku web dyno**.
 
 ## Manual test scenario (host + guest)
 

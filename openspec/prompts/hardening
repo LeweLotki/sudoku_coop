@@ -1,0 +1,536 @@
+I want to create the next OpenSpec change for this project: `production-hardening`.
+
+Context:
+
+This project is a small private browser extension + FastAPI backend for coordinating SudokuPad sessions between a host and guest.
+
+The app is already functionally working:
+
+* backend uses FastAPI WebSockets
+* host can create a session
+* guest can join a session
+* both users open the same SudokuPad page
+* guest clicks a real SudokuPad cell
+* content script converts the click to row/column
+* guest extension sends `cell:highlight` to backend
+* backend broadcasts the event to host
+* host content script highlights the matching cell with overlay
+
+The project is now moving from local-only development toward private deployment:
+
+* backend will be containerized and deployed on Heroku
+* extension will be built as a zip and sent privately to a few friends
+* this is not a public product
+* this is not intended to support many users
+* no account system is needed
+* no database is needed
+* no Redis is needed
+
+Current hardening goals:
+
+Implement these six production hardening items:
+
+1. Use `wss://` for production backend WebSocket URL.
+2. Add `ACCESS_TOKEN` protection for WebSocket connections.
+3. Use 8-character session codes.
+4. Add session expiration.
+5. Add simple rate limits.
+6. Keep extension permissions narrow.
+
+Important scope:
+
+Implement only pragmatic MVP hardening.
+
+Do not add:
+
+* login system
+* OAuth
+* database
+* Redis
+* user accounts
+* complex admin panel
+* paid production infrastructure
+* complex distributed rate limiting
+* multi-dyno session sharing
+* analytics
+* telemetry
+* invasive logging
+* broad extension permissions
+
+Backend should remain in-memory.
+
+Heroku deployment should assume one web dyno only, because in-memory sessions will not work correctly across multiple independent dynos.
+
+Backend hardening requirements:
+
+1. ACCESS_TOKEN for WebSocket
+
+Add a required access token for the WebSocket endpoint.
+
+Preferred simple approach:
+
+Clients connect to:
+
+ws://localhost:8000/ws?token=...
+wss://production-domain/ws?token=...
+
+Backend should:
+
+* read token from query parameter `token`
+* compare it against configured environment variable `ACCESS_TOKEN`
+* reject connection if missing or invalid
+* close with an appropriate WebSocket close code if possible
+* not accept any app-level messages before token validation
+
+Development behavior:
+
+* local development may use a default token only if explicitly configured
+* do not silently disable token checks in production
+* `.env.example` should include a placeholder token value
+* real token must not be committed
+
+Suggested config:
+
+ACCESS_TOKEN=change-me-local-dev-token
+
+In production, Heroku config var should contain a long random value.
+
+2. 8-character session codes
+
+Change session code length to 8 characters.
+
+Use uppercase human-friendly alphabet.
+
+Avoid ambiguous characters if easy.
+
+Example alphabet:
+
+ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+
+Rules:
+
+* session IDs must be 8 characters by default
+* session ID length should be configurable through settings if config system already supports it
+* generated code must be unique among active sessions
+* collision handling must exist even if collisions are unlikely
+
+Suggested config:
+
+SESSION_CODE_LENGTH=8
+
+3. Session expiration
+
+Add TTL for sessions.
+
+Suggested default:
+
+SESSION_TTL_SECONDS=7200
+
+That is 2 hours.
+
+Backend should:
+
+* store created_at and/or last_activity_at for sessions
+* expire old sessions
+* cleanup expired sessions
+* reject join attempts for expired sessions
+* remove expired sessions from the in-memory registry
+* notify connected clients if reasonably simple, but do not over-engineer
+
+Expiration strategy:
+
+Simple lazy cleanup is acceptable:
+
+* run cleanup before creating session
+* run cleanup before joining session
+* run cleanup before processing highlight event
+* optionally run a background cleanup task during FastAPI startup if project already has clean lifecycle handling
+
+Prefer simple lazy cleanup unless a background task is already easy and clean.
+
+When a session expires:
+
+* remove it from memory
+* host and guest connections should no longer be considered valid
+* new events for that session should return a `session:error`
+
+Suggested error message:
+
+{
+"type": "session:error",
+"message": "Session expired"
+}
+
+4. Simple rate limits
+
+Add simple in-memory rate limiting.
+
+This is not enterprise-grade. It is only meant to prevent accidental spam and basic abuse.
+
+Rate limits should apply per WebSocket connection.
+
+Suggested defaults:
+
+MAX_MESSAGES_PER_10_SECONDS=30
+MAX_INVALID_MESSAGES_PER_CONNECTION=10
+MAX_MESSAGE_BYTES=2048
+MAX_ACTIVE_SESSIONS=50
+MAX_GUESTS_PER_SESSION=5
+
+Implement reasonable config names matching existing project style.
+
+Backend should:
+
+* reject messages larger than `MAX_MESSAGE_BYTES`
+* reject or close connections that exceed message rate
+* count invalid messages per connection
+* close connection after too many invalid messages
+* reject creating new sessions if `MAX_ACTIVE_SESSIONS` is reached
+* reject joining if session already has `MAX_GUESTS_PER_SESSION` guests
+
+For rate limiting:
+
+* a simple sliding window or fixed window is acceptable
+* per-connection state is enough
+* no Redis
+* no IP-based distributed rate limiting
+* no global distributed limiter
+
+Suggested error events:
+
+{
+"type": "session:error",
+"message": "Rate limit exceeded"
+}
+
+{
+"type": "session:error",
+"message": "Message too large"
+}
+
+{
+"type": "session:error",
+"message": "Too many invalid messages"
+}
+
+{
+"type": "session:error",
+"message": "Session is full"
+}
+
+{
+"type": "session:error",
+"message": "Too many active sessions"
+}
+
+Security logging:
+
+* log important security events at a high level
+* do not log access token
+* do not log full raw message bodies
+* do not log sensitive config values
+
+5. Production `wss://` support in extension
+
+Update extension configuration so backend WebSocket URL can be changed for production.
+
+Current local value is probably:
+
+ws://localhost:8000/ws
+
+Production should use:
+
+wss://<deployed-heroku-domain>/ws
+
+Do not hardcode localhost as the only possible backend URL.
+
+Preferred approach:
+
+* centralize backend URL config in one file, for example `extension/src/shared/config.ts`
+* support Vite env variable, for example:
+
+VITE_BACKEND_WS_URL=wss://your-app.herokuapp.com/ws
+
+* local development can default to:
+
+ws://localhost:8000/ws
+
+* production build should use the configured `VITE_BACKEND_WS_URL`
+
+Access token in extension:
+
+Since this is a private zip for friends, use a pragmatic approach.
+
+Preferred approach:
+
+* support Vite env variable for access token:
+
+VITE_ACCESS_TOKEN=...
+
+* extension appends token to WebSocket URL as query param:
+
+wss://your-app.herokuapp.com/ws?token=...
+
+Important:
+
+* do not treat this as a high-security secret once it is inside the extension bundle
+* it is a private invite token to block random internet users
+* do not commit real production token
+* document that token must be rotated if zip is shared publicly
+
+Alternative acceptable approach:
+
+* allow user to paste token in extension settings and store it in `chrome.storage.local`
+* only implement this if it is already easy and does not delay the MVP
+
+Prefer env-based build token for this change unless project structure clearly supports settings.
+
+6. Keep extension permissions narrow
+
+Review `extension/manifest.json`.
+
+Requirements:
+
+* content scripts should match only SudokuPad:
+
+https://sudokupad.app/*
+
+* extension should not request `<all_urls>`
+* extension should not request broad host permissions
+* permissions should remain minimal
+
+Expected permissions may include:
+
+* storage
+* tabs
+* activeTab only if currently needed
+
+Expected host permissions may include:
+
+* https://sudokupad.app/*
+* wss://production-backend-domain/*
+* ws://localhost:8000/* for local development if needed
+
+Do not add unnecessary permissions.
+
+Do not request access to all websites.
+
+If extension build uses separate development/production manifests, keep both narrow.
+
+Backend config requirements:
+
+Update or create settings in backend config.
+
+Suggested environment variables:
+
+APP_ENV=development
+ACCESS_TOKEN=change-me-local-dev-token
+SESSION_CODE_LENGTH=8
+SESSION_TTL_SECONDS=7200
+MAX_MESSAGES_PER_10_SECONDS=30
+MAX_INVALID_MESSAGES_PER_CONNECTION=10
+MAX_MESSAGE_BYTES=2048
+MAX_ACTIVE_SESSIONS=50
+MAX_GUESTS_PER_SESSION=5
+
+Update `.env.example`.
+
+Do not commit `.env`.
+
+Backend tests:
+
+Add or update tests for:
+
+1. Access token:
+
+   * connection without token is rejected
+   * connection with wrong token is rejected
+   * connection with correct token is accepted
+
+2. Session code:
+
+   * generated session code length is 8
+   * generated code uses allowed alphabet
+   * collision handling still works
+
+3. Session expiration:
+
+   * expired session is removed
+   * guest cannot join expired session
+   * highlight cannot be sent to expired session
+
+4. Limits:
+
+   * too many guests rejected
+   * too many active sessions rejected
+   * oversized message rejected
+   * rate limit exceeded produces error or closes connection
+   * too many invalid messages closes or errors
+
+Keep tests pragmatic. Do not spend excessive effort on brittle WebSocket internals if service-level tests can cover the behavior cleanly.
+
+Extension tests/checks:
+
+Add/update tests if project already has a simple test setup.
+
+At minimum verify:
+
+* production WebSocket URL builder appends token correctly
+* URL builder preserves existing query params if relevant
+* default dev URL remains `ws://localhost:8000/ws`
+* manifest does not contain `<all_urls>`
+
+If tests are not already set up, keep helpers pure and document manual verification.
+
+OpenSpec requirements:
+
+Create or update the OpenSpec change for `production-hardening`.
+
+The OpenSpec proposal should include:
+
+1. `proposal.md`
+
+   * Explain that this change prepares the private MVP for Heroku deployment and zipped extension distribution.
+   * List the six hardening goals.
+   * State that this is not full enterprise security.
+   * State that no login/database/Redis will be added.
+   * State that in-memory sessions require one dyno only.
+
+2. `design.md`
+
+   * Explain WebSocket access token validation.
+   * Explain why token is an invite token, not a true secret once bundled into extension.
+   * Explain 8-character session codes.
+   * Explain session expiration.
+   * Explain simple per-connection rate limiting.
+   * Explain extension production `wss://` config.
+   * Explain narrow extension permissions.
+   * Explain Heroku one-dyno limitation.
+
+3. `tasks.md`
+
+   * inspect backend settings/session service/WebSocket connection manager
+   * add backend security config
+   * add WebSocket token validation
+   * update session code length to 8
+   * add session TTL cleanup
+   * add simple rate limiting and message size limit
+   * add max sessions and max guests limits
+   * update backend tests
+   * update `.env.example`
+   * update backend README
+   * inspect extension config/manifest
+   * add production WebSocket URL config
+   * add access token URL handling
+   * verify narrow permissions
+   * update extension README
+   * run backend tests
+   * run extension build/typecheck/lint
+   * document Heroku config vars
+
+Acceptance criteria:
+
+Backend:
+
+* WebSocket connection without token is rejected.
+* WebSocket connection with invalid token is rejected.
+* WebSocket connection with valid token works.
+* Real token is read from environment/config.
+* `.env.example` documents required token.
+* Session codes are 8 characters.
+* Session codes use allowed human-friendly alphabet.
+* Sessions expire after configured TTL.
+* Expired sessions are cleaned up.
+* Guest cannot join expired session.
+* Highlight cannot be sent for expired session.
+* Message size limit exists.
+* Per-connection message rate limit exists.
+* Too many invalid messages are handled safely.
+* Max active sessions limit exists.
+* Max guests per session limit exists.
+* Security-related logs do not include token.
+* No Redis is added.
+* No database is added.
+* No login system is added.
+
+Extension:
+
+* Production WebSocket URL can be configured as `wss://...`.
+* Local development still supports `ws://localhost:8000/ws`.
+* Extension appends access token to WebSocket URL.
+* Real production token is not committed.
+* Guest/host flows still work after token addition.
+* Manifest permissions remain narrow.
+* Manifest does not include `<all_urls>`.
+* Content script still only targets `https://sudokupad.app/*`.
+
+Documentation:
+
+* Backend README documents env vars.
+* Extension README documents production URL/token setup.
+* README explains that Heroku should run one dyno for this in-memory MVP.
+* README explains that the extension zip contains the invite token if env-based token bundling is used.
+* README explains token rotation if the zip leaks.
+
+Manual verification scenario:
+
+1. Backend local without token:
+
+   * start backend with ACCESS_TOKEN set
+   * connect to `/ws` without token
+   * verify rejected
+
+2. Backend local with wrong token:
+
+   * connect to `/ws?token=wrong`
+   * verify rejected
+
+3. Backend local with correct token:
+
+   * connect to `/ws?token=<ACCESS_TOKEN>`
+   * verify accepted
+
+4. Extension local:
+
+   * configure extension dev backend URL:
+     ws://localhost:8000/ws
+   * configure access token
+   * run backend
+   * load extension
+   * host creates session
+   * guest joins
+   * guest clicks SudokuPad cell
+   * host sees highlight
+
+5. Session code:
+
+   * verify host receives 8-character code
+
+6. Session expiration:
+
+   * temporarily set short TTL, for example 5 seconds
+   * create session
+   * wait for expiration
+   * verify guest cannot join or highlight after expiration
+
+7. Permissions:
+
+   * inspect manifest
+   * verify no `<all_urls>`
+   * verify SudokuPad-only content script
+
+Quality requirements:
+
+* Keep implementation simple.
+* Do not over-engineer security.
+* Do not add unnecessary dependencies.
+* Keep config centralized.
+* Keep error messages clear but not overly detailed.
+* Avoid logging secrets.
+* Avoid breaking existing working flows.
+* Prefer small targeted changes.
+* Preserve current WebSocket event protocol.
+* Preserve current host/guest extension behavior.
+* Keep this deployable for a private 3-person MVP.
+
+Please now create the OpenSpec proposal for `production-hardening` and implement these pragmatic hardening changes.

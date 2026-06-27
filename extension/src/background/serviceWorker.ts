@@ -10,7 +10,11 @@
 //
 // Reconnection/backoff is intentionally out of scope for this change.
 
-import { DEFAULT_BACKEND_WS_URL, SUDOKUPAD_URL_PATTERN } from "../shared/config";
+import {
+  BACKEND_WS_URL,
+  buildBackendUrl,
+  SUDOKUPAD_URL_PATTERN,
+} from "../shared/config";
 import {
   BACKEND_EVENT,
   EXT_MESSAGE,
@@ -34,7 +38,7 @@ let state: ExtensionState = {
   connectionStatus: "idle",
   sessionId: null,
   error: null,
-  backendUrl: DEFAULT_BACKEND_WS_URL,
+  backendUrl: BACKEND_WS_URL,
 };
 
 let socket: WebSocket | null = null;
@@ -82,7 +86,7 @@ async function restoreState(): Promise<void> {
         ...state,
         role: saved.role ?? null,
         sessionId: saved.sessionId ?? null,
-        backendUrl: saved.backendUrl ?? DEFAULT_BACKEND_WS_URL,
+        backendUrl: saved.backendUrl ?? BACKEND_WS_URL,
       };
     }
   } catch {
@@ -140,7 +144,8 @@ function ensureSocket(onReady: () => void): void {
   startKeepAlive();
 
   try {
-    socket = new WebSocket(state.backendUrl);
+    // Append the invite token at connect time; it is never persisted to storage.
+    socket = new WebSocket(buildBackendUrl(state.backendUrl));
   } catch {
     setState({ connectionStatus: "error", error: "Failed to open connection." });
     pendingAction = null;
