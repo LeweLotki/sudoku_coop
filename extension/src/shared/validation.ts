@@ -1,5 +1,7 @@
 // Pure validation helpers (no Chrome APIs) so they are easy to unit test.
 
+import type { ConnectionStatus, ExtensionRole } from "./types";
+
 export const MIN_INDEX = 1;
 export const MAX_INDEX = 9;
 
@@ -47,6 +49,34 @@ export function validateCoordinate(
   }
 
   return { ok: true, row, column };
+}
+
+/** The slice of extension state needed to authorize a guest grid click. */
+export interface GuestClickContext {
+  role: ExtensionRole;
+  connectionStatus: ConnectionStatus;
+  sessionId: string | null;
+}
+
+/**
+ * Decide whether a guest grid click should be forwarded to the backend as a
+ * `cell:highlight`. Only a connected guest with a session and a valid 1-9
+ * coordinate qualifies; host clicks and disconnected/invalid clicks are not
+ * forwarded. Pure so the background's gating logic can be unit-tested.
+ */
+export function canForwardGuestClick(
+  ctx: GuestClickContext,
+  row: unknown,
+  column: unknown,
+): boolean {
+  return (
+    ctx.role === "guest" &&
+    ctx.connectionStatus === "connected" &&
+    typeof ctx.sessionId === "string" &&
+    ctx.sessionId.length > 0 &&
+    isValidIndex(row) &&
+    isValidIndex(column)
+  );
 }
 
 /** Normalize a session code; returns null when empty/blank. */

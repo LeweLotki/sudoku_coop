@@ -67,6 +67,40 @@ export function cellRectFromBounds(
   };
 }
 
+/** A 1-based grid coordinate. */
+export interface GridCell {
+  row: number;
+  column: number;
+}
+
+/**
+ * Map a screen-space point (e.g. a click's clientX/clientY) to the 1-based
+ * { row, column } of the cell it falls in, for a `gridSize`×`gridSize` grid.
+ *
+ * Inverse of `cellRectFromBounds`. Returns null when the point lies outside the
+ * grid bounds or the computed row/column falls outside 1..gridSize.
+ */
+export function cellFromPoint(
+  bounds: GridBounds,
+  x: number,
+  y: number,
+  gridSize: number = DEFAULT_GRID_SIZE,
+): GridCell | null {
+  if (bounds.width <= 0 || bounds.height <= 0) return null;
+
+  const relativeX = x - bounds.left;
+  const relativeY = y - bounds.top;
+  if (relativeX < 0 || relativeY < 0) return null;
+  if (relativeX >= bounds.width || relativeY >= bounds.height) return null;
+
+  const column = Math.floor(relativeX / (bounds.width / gridSize)) + 1;
+  const row = Math.floor(relativeY / (bounds.height / gridSize)) + 1;
+
+  if (row < 1 || row > gridSize || column < 1 || column > gridSize) return null;
+
+  return { row, column };
+}
+
 /** Build a `GridBounds` from a rectangle plus a `source` label. */
 export function gridBoundsFromRect(rect: Rect, source: string): GridBounds {
   return {

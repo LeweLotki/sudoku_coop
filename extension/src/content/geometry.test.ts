@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type GridBounds,
   type Rect,
+  cellFromPoint,
   cellRectFromBounds,
   pickBestCandidate,
   scoreCandidate,
@@ -64,6 +65,54 @@ describe("cellRectFromBounds", () => {
       width: 100,
       height: 100,
     });
+  });
+});
+
+describe("cellFromPoint", () => {
+  it("maps a click in the top-left cell to row 1, column 1", () => {
+    expect(cellFromPoint(bounds900(), 10, 10)).toEqual({ row: 1, column: 1 });
+  });
+
+  it("maps a click in the bottom-right cell to row 9, column 9", () => {
+    expect(cellFromPoint(bounds900(), 890, 890)).toEqual({ row: 9, column: 9 });
+  });
+
+  it("maps a click at the grid center to row 5, column 5", () => {
+    expect(cellFromPoint(bounds900(), 450, 450)).toEqual({ row: 5, column: 5 });
+  });
+
+  it("is the inverse of cellRectFromBounds for cell centers", () => {
+    const bounds = bounds900();
+    const rect = cellRectFromBounds(bounds, 7, 2);
+    const point = cellFromPoint(
+      bounds,
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
+    expect(point).toEqual({ row: 7, column: 2 });
+  });
+
+  it("returns null for points outside the grid bounds", () => {
+    const bounds = bounds900();
+    expect(cellFromPoint(bounds, -1, 10)).toBeNull();
+    expect(cellFromPoint(bounds, 10, -1)).toBeNull();
+    expect(cellFromPoint(bounds, 900, 10)).toBeNull();
+    expect(cellFromPoint(bounds, 10, 900)).toBeNull();
+    expect(cellFromPoint(bounds, 5000, 5000)).toBeNull();
+  });
+
+  it("respects a grid origin offset", () => {
+    const offset: GridBounds = {
+      left: 50,
+      top: 30,
+      width: 900,
+      height: 900,
+      right: 950,
+      bottom: 930,
+      source: "test",
+    };
+    expect(cellFromPoint(offset, 60, 40)).toEqual({ row: 1, column: 1 });
+    expect(cellFromPoint(offset, 40, 40)).toBeNull(); // left of the grid
   });
 });
 

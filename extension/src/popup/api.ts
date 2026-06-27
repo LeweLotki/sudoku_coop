@@ -41,13 +41,6 @@ export function guestJoinSession(
   return send({ type: EXT_MESSAGE.GUEST_JOIN_SESSION, sessionId });
 }
 
-export function guestSendHighlight(
-  row: number,
-  column: number,
-): Promise<ExtensionState | null> {
-  return send({ type: EXT_MESSAGE.GUEST_SEND_HIGHLIGHT, row, column });
-}
-
 export function disconnect(): Promise<ExtensionState | null> {
   return send({ type: EXT_MESSAGE.DISCONNECT });
 }

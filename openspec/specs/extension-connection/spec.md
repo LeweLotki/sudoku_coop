@@ -13,7 +13,8 @@ The extension popup SHALL allow the user to choose between Host and Guest mode, 
 
 #### Scenario: User selects Guest mode
 - **WHEN** the user opens the popup and selects Guest
-- **THEN** the popup SHALL display the Guest panel with session code, row, and column inputs
+- **THEN** the popup SHALL display the Guest panel with a session code input and a Join Session control
+- **AND** the Guest panel SHALL NOT contain row, column, or manual Send Highlight controls
 - **AND** the selected role SHALL be recorded in extension state
 
 ### Requirement: Host Create-Session Flow
@@ -41,21 +42,10 @@ The extension SHALL let a guest join an existing session using a session code by
 - **THEN** the popup SHALL show a validation error
 - **AND** SHALL NOT send a `session:join` event
 
-### Requirement: Guest Highlight Test-Send
-The extension SHALL let a connected guest send a row/column highlight event to the backend, validating the coordinate before sending.
-
-#### Scenario: Guest sends a valid coordinate
-- **WHEN** a joined guest enters a row and column from 1 to 9 and clicks Send Highlight
-- **THEN** the background service worker SHALL send `{ "type": "cell:highlight", "sessionId": "<code>", "row": <row>, "column": <column> }` over the WebSocket
-
-#### Scenario: Coordinate validation in the popup
-- **WHEN** the guest enters a row or column that is not an integer from 1 to 9
-- **THEN** the popup SHALL show a validation error
-- **AND** SHALL NOT send a `cell:highlight` event
-
-#### Scenario: Send disabled when not connected
-- **WHEN** the guest is not joined/connected to a session
-- **THEN** the Send Highlight control SHALL be disabled
+#### Scenario: Connected guest sees grid-click instructions
+- **WHEN** the guest is joined/connected to a session
+- **THEN** the Guest panel SHALL display instruction text directing the user to click a cell on the SudokuPad grid (e.g. "Connected as guest. Click a cell on the SudokuPad grid to highlight it for the host.")
+- **AND** the panel SHALL NOT require the popup to remain open for clicks to be sent
 
 ### Requirement: Background Coordination Layer
 The background service worker SHALL be the single owner of the WebSocket connection and extension state, and SHALL mediate all communication between the popup, the backend, and the content script.

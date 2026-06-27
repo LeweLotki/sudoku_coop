@@ -15,10 +15,12 @@ import {
   BACKEND_EVENT,
   EXT_MESSAGE,
   type ExtensionStateResponse,
+  type GridCellClickedMessage,
   type HostReceivedHighlightMessage,
   type PopupToBackgroundMessage,
 } from "../shared/messages";
 import { parseBackendMessage } from "../shared/parseBackendMessage";
+import { canForwardGuestClick } from "../shared/validation";
 import type {
   ExtensionState,
   InboundBackendEvent,
@@ -88,6 +90,37 @@ async function restoreState(): Promise<void> {
   }
 }
 
+// --- Service worker keepalive -------------------------------------------------
+//
+// MV3 terminates an idle service worker after ~30s, which would close the
+// WebSocket and tear down the session even though the user is still sitting on
+// the SudokuPad page with the popup closed. When the host's socket closes, the
+// backend closes the session and tells the guest "session closed by host"; when
+// the guest's socket closes, its in-memory `connectionStatus` is lost so clicks
+// can no longer be forwarded.
+//
+// A trivial periodic chrome API call resets the idle timer and keeps the worker
+// (and its WebSocket) alive while a connection is active. This is the pattern
+// recommended for persistent MV3 WebSocket connections.
+
+const KEEPALIVE_INTERVAL_MS = 20_000;
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+function startKeepAlive(): void {
+  if (keepAliveTimer !== null) return;
+  keepAliveTimer = setInterval(() => {
+    // The call's only purpose is to reset the service worker idle timer.
+    void chrome.runtime.getPlatformInfo().catch(() => {});
+  }, KEEPALIVE_INTERVAL_MS);
+}
+
+function stopKeepAlive(): void {
+  if (keepAliveTimer !== null) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+}
+
 // --- WebSocket lifecycle ------------------------------------------------------
 
 function ensureSocket(onReady: () => void): void {
@@ -104,12 +137,14 @@ function ensureSocket(onReady: () => void): void {
 
   pendingAction = onReady;
   setState({ connectionStatus: "connecting", error: null });
+  startKeepAlive();
 
   try {
     socket = new WebSocket(state.backendUrl);
   } catch {
     setState({ connectionStatus: "error", error: "Failed to open connection." });
     pendingAction = null;
+    stopKeepAlive();
     return;
   }
 
@@ -131,6 +166,7 @@ function ensureSocket(onReady: () => void): void {
   socket.onclose = () => {
     socket = null;
     pendingAction = null;
+    stopKeepAlive();
     setState({ connectionStatus: "disconnected" });
   };
 }
@@ -147,6 +183,7 @@ function sendToBackend(event: OutboundBackendEvent): void {
 
 function disconnect(): void {
   pendingAction = null;
+  stopKeepAlive();
   if (socket) {
     try {
       socket.close();
@@ -339,22 +376,6 @@ function handlePopupMessage(
       sendResponse({ state });
       return false;
 
-    case EXT_MESSAGE.GUEST_SEND_HIGHLIGHT: {
-      if (!state.sessionId) {
-        setState({ error: "Join a session before sending a highlight." });
-        sendResponse({ state });
-        return false;
-      }
-      sendToBackend({
-        type: BACKEND_EVENT.CELL_HIGHLIGHT,
-        sessionId: state.sessionId,
-        row: message.row,
-        column: message.column,
-      });
-      sendResponse({ state });
-      return false;
-    }
-
     case EXT_MESSAGE.DISCONNECT:
       disconnect();
       sendResponse({ state });
@@ -382,9 +403,54 @@ const REVERSE_POPUP_TYPES: Record<string, true> = {
   [EXT_MESSAGE.SET_ROLE]: true,
   [EXT_MESSAGE.HOST_CREATE_SESSION]: true,
   [EXT_MESSAGE.GUEST_JOIN_SESSION]: true,
-  [EXT_MESSAGE.GUEST_SEND_HIGHLIGHT]: true,
   [EXT_MESSAGE.DISCONNECT]: true,
 };
+
+// --- Guest grid-click handling (content → background) -------------------------
+
+/**
+ * Handle a `GRID_CELL_CLICKED` report from the content script. The background is
+ * the authority for role/session state: it forwards a `cell:highlight` only when
+ * the current user is a connected guest with a valid 1-9 coordinate. Host clicks
+ * and disconnected/invalid clicks are ignored safely (no throw, no send).
+ */
+function handleGridCellClicked(message: GridCellClickedMessage): void {
+  const { row, column } = message.payload;
+
+  if (
+    !canForwardGuestClick(
+      {
+        role: state.role,
+        connectionStatus: state.connectionStatus,
+        sessionId: state.sessionId,
+      },
+      row,
+      column,
+    )
+  ) {
+    return;
+  }
+
+  // sessionId is guaranteed non-null by canForwardGuestClick.
+  sendToBackend({
+    type: BACKEND_EVENT.CELL_HIGHLIGHT,
+    sessionId: state.sessionId as string,
+    row,
+    column,
+  });
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (
+    !message ||
+    typeof message !== "object" ||
+    (message as { type?: unknown }).type !== EXT_MESSAGE.GRID_CELL_CLICKED
+  ) {
+    return false;
+  }
+  handleGridCellClicked(message as GridCellClickedMessage);
+  return false;
+});
 
 // Restore persisted state on worker startup.
 void restoreState();

@@ -15,7 +15,9 @@
 import {
   DEFAULT_GRID_SIZE,
   type GridBounds,
+  type GridCell,
   type Rect,
+  cellFromPoint,
   gridBoundsFromRect,
   pickBestCandidate,
   unionRect,
@@ -132,6 +134,21 @@ export function getCellRect(row: number, column: number): Rect | null {
   if (!el) return null;
   const rect = rectOf(el);
   return isVisible(rect) ? rect : null;
+}
+
+/**
+ * Map a viewport click point to the 1-based { row, column } it falls in, by
+ * detecting the current grid bounds. Returns null when no grid is detected or
+ * the point is outside the grid. Read-only: never touches SudokuPad state.
+ */
+export function cellFromClientPoint(
+  clientX: number,
+  clientY: number,
+  gridSize: number = DEFAULT_GRID_SIZE,
+): GridCell | null {
+  const bounds = detectGridBounds(gridSize);
+  if (!bounds) return null;
+  return cellFromPoint(bounds, clientX, clientY, gridSize);
 }
 
 /** Log a concise summary of a successful detection. */

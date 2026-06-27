@@ -38,16 +38,16 @@ export const EXT_MESSAGE = {
   SET_ROLE: "SET_ROLE",
   HOST_CREATE_SESSION: "HOST_CREATE_SESSION",
   GUEST_JOIN_SESSION: "GUEST_JOIN_SESSION",
-  GUEST_SEND_HIGHLIGHT: "GUEST_SEND_HIGHLIGHT",
   GET_EXTENSION_STATE: "GET_EXTENSION_STATE",
   DISCONNECT: "DISCONNECT",
   // Background → popup
   EXTENSION_STATE_UPDATED: "EXTENSION_STATE_UPDATED",
   // Background → content
   HOST_RECEIVED_HIGHLIGHT: "HOST_RECEIVED_HIGHLIGHT",
-  // Content → background (optional)
+  // Content → background
   CONTENT_SCRIPT_READY: "CONTENT_SCRIPT_READY",
   SUDOKUPAD_TAB_DETECTED: "SUDOKUPAD_TAB_DETECTED",
+  GRID_CELL_CLICKED: "GRID_CELL_CLICKED",
 } as const;
 
 export type ExtMessageType = (typeof EXT_MESSAGE)[keyof typeof EXT_MESSAGE];
@@ -68,12 +68,6 @@ export interface GuestJoinSessionMessage {
   sessionId: string;
 }
 
-export interface GuestSendHighlightMessage {
-  type: typeof EXT_MESSAGE.GUEST_SEND_HIGHLIGHT;
-  row: number;
-  column: number;
-}
-
 export interface GetExtensionStateMessage {
   type: typeof EXT_MESSAGE.GET_EXTENSION_STATE;
 }
@@ -86,7 +80,6 @@ export type PopupToBackgroundMessage =
   | SetRoleMessage
   | HostCreateSessionMessage
   | GuestJoinSessionMessage
-  | GuestSendHighlightMessage
   | GetExtensionStateMessage
   | DisconnectMessage;
 
@@ -116,4 +109,19 @@ export interface HostReceivedHighlightMessage {
 
 export interface ContentScriptReadyMessage {
   type: typeof EXT_MESSAGE.CONTENT_SCRIPT_READY;
+}
+
+/** Source label identifying which surface produced a grid click. */
+export const GRID_CLICK_SOURCE = "sudokupad-content-script" as const;
+
+/**
+ * Sent by the content script for any click that lands inside the detected grid.
+ * The content script does NOT decide role/connection — the background validates
+ * the current state and only then forwards a `cell:highlight` to the backend.
+ */
+export interface GridCellClickedMessage {
+  type: typeof EXT_MESSAGE.GRID_CELL_CLICKED;
+  payload: CellCoordinate & {
+    source: typeof GRID_CLICK_SOURCE;
+  };
 }

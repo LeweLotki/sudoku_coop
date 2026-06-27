@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ExtensionState } from "../shared/types";
-import { normalizeSessionCode, validateCoordinate } from "../shared/validation";
+import { normalizeSessionCode } from "../shared/validation";
 import * as api from "./api";
 
 interface GuestPanelProps {
@@ -10,8 +10,6 @@ interface GuestPanelProps {
 
 export function GuestPanel({ state, onState }: GuestPanelProps) {
   const [codeInput, setCodeInput] = useState(state.sessionId ?? "");
-  const [rowInput, setRowInput] = useState("");
-  const [columnInput, setColumnInput] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,19 +25,6 @@ export function GuestPanel({ state, onState }: GuestPanelProps) {
     setValidationError(null);
     setBusy(true);
     const next = await api.guestJoinSession(code);
-    if (next) onState(next);
-    setBusy(false);
-  };
-
-  const sendHighlight = async () => {
-    const result = validateCoordinate(rowInput, columnInput);
-    if (!result.ok) {
-      setValidationError(result.error);
-      return;
-    }
-    setValidationError(null);
-    setBusy(true);
-    const next = await api.guestSendHighlight(result.row, result.column);
     if (next) onState(next);
     setBusy(false);
   };
@@ -90,50 +75,20 @@ export function GuestPanel({ state, onState }: GuestPanelProps) {
       </div>
 
       {isJoined ? (
-        <p className="mb-3 text-xs text-green-700">
-          Joined session{" "}
-          <span className="font-mono font-semibold">{state.sessionId}</span>.
-        </p>
+        <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+          <p className="mb-1">
+            Joined session{" "}
+            <span className="font-mono font-semibold">{state.sessionId}</span>.
+          </p>
+          <p>
+            Connected as guest. Click a cell on the SudokuPad grid to highlight
+            it for the host.
+          </p>
+        </div>
       ) : null}
 
-      <fieldset className="mb-3" disabled={!isJoined}>
-        <legend className="mb-1 text-xs text-gray-500">
-          Send a highlight (row &amp; column, 1–9)
-        </legend>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            max={9}
-            className="w-16 rounded border px-2 py-1 disabled:opacity-50"
-            placeholder="Row"
-            aria-label="Row"
-            value={rowInput}
-            onChange={(e) => setRowInput(e.target.value)}
-          />
-          <input
-            type="number"
-            min={1}
-            max={9}
-            className="w-16 rounded border px-2 py-1 disabled:opacity-50"
-            placeholder="Col"
-            aria-label="Column"
-            value={columnInput}
-            onChange={(e) => setColumnInput(e.target.value)}
-          />
-          <button
-            type="button"
-            className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
-            onClick={() => void sendHighlight()}
-            disabled={busy || !isJoined}
-          >
-            Send Highlight
-          </button>
-        </div>
-      </fieldset>
-
       {validationError ? (
-        <p className="text-xs text-red-700" role="alert">
+        <p className="mt-3 text-xs text-red-700" role="alert">
           {validationError}
         </p>
       ) : null}

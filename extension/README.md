@@ -6,8 +6,11 @@ The extension's **core connection layer** (`extension-core-connection`) provides
 the popup UI, role selection, a background WebSocket client, and message passing
 between popup, background service worker, and content script. The
 **host grid overlay** (`host-grid-overlay`) builds on it: the SudokuPad content
-script now detects the on-page grid and draws a visible highlight over the cell a
-guest selects.
+script detects the on-page grid and draws a visible highlight over a selected
+cell. The **guest grid click** (`guest-grid-click-highlight`) closes the loop:
+instead of typing coordinates, the guest clicks directly on their own SudokuPad
+grid. The content script converts the click to a 1-based `{ row, column }` and
+the background forwards the existing `cell:highlight` event to the host.
 
 > **Known limitations:**
 >
@@ -15,8 +18,10 @@ guest selects.
 > - The highlight is purely visual: the extension draws its own DOM overlay and
 >   never reads or modifies SudokuPad's internal state (no digit-writing, no
 >   move simulation).
-> - The guest row/column UI is intentionally simple; the polished coordinate
->   modal is a later change.
+> - **Same-puzzle assumption:** the host and guest are expected to open the same
+>   SudokuPad puzzle URL. If they open different puzzles, the clicked coordinate
+>   is still sent and highlighted, but it may refer to a different puzzle
+>   context. There is no automatic puzzle-URL matching.
 > - There is no automatic reconnection yet (deferred to `end-to-end-polish`).
 
 ## Tech stack
@@ -94,25 +99,30 @@ popups talking to the same backend.
 
 1. Start the backend (see above).
 2. Build and load the extension as unpacked in each profile.
-3. Open a SudokuPad puzzle, e.g. `https://sudokupad.app/BLLGjtrb4P`.
+3. Open the **same** SudokuPad puzzle in both, e.g.
+   `https://sudokupad.app/BLLGjtrb4P`.
 4. **Host:** open the popup → select **Host** → click **Create Session** →
    note the displayed session code.
 5. **Guest:** open the popup → select **Guest** → enter the session code →
-   click **Join** → confirm the joined status.
-6. **Guest:** enter row `3` and column `5` → click **Send Highlight**.
+   click **Join** → confirm the joined status and the "click a cell" instruction.
+6. **Guest:** close or ignore the popup and click row 3, column 5 directly on the
+   real SudokuPad grid.
 7. **Verify on the host's SudokuPad page:**
+   - the guest's own page still behaves normally (the click is not blocked),
    - a cyan highlight appears over row 3, column 5 and fades after ~2.5s,
    - the highlight does **not** block clicking SudokuPad cells (pointer-through),
-   - the page console logs `[Sudoku Coop]` messages (grid detected, highlight
-     received, highlight rendered).
+   - the page console logs `[Sudoku Coop]` messages (guest click, grid detected,
+     highlight received, highlight rendered).
 
 ### Additional checks
 
-- Send row `1` / column `1` → top-left cell highlights; row `9` / column `9` →
-  bottom-right cell highlights.
-- Resize the window or scroll, then send another highlight → it stays aligned.
-- Send an out-of-range value (e.g. row `10`) → the host logs a warning and draws
-  nothing.
+- Guest clicks the top-left cell → host highlights row 1, column 1; guest clicks
+  the bottom-right cell → host highlights row 9, column 9.
+- Guest clicks **outside** the grid → nothing is sent or highlighted.
+- **Host** clicking their own grid does **not** send a highlight (only a
+  connected guest's clicks are forwarded).
+- A **disconnected** guest clicking the grid does **not** send a highlight.
+- Resize the window or scroll, then click again → the highlight stays aligned.
 
 ### Debug helper (manual testing without a guest)
 

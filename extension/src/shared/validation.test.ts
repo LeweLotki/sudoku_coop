@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canForwardGuestClick,
+  type GuestClickContext,
   isValidIndex,
   normalizeSessionCode,
   validateCoordinate,
@@ -46,6 +48,55 @@ describe("validateCoordinate", () => {
     expect(validateCoordinate("3.5", "5").ok).toBe(false);
     expect(validateCoordinate("", "5").ok).toBe(false);
     expect(validateCoordinate("abc", "5").ok).toBe(false);
+  });
+});
+
+describe("canForwardGuestClick", () => {
+  const connectedGuest: GuestClickContext = {
+    role: "guest",
+    connectionStatus: "connected",
+    sessionId: "AB12",
+  };
+
+  it("forwards a valid click for a connected guest with a session", () => {
+    expect(canForwardGuestClick(connectedGuest, 3, 5)).toBe(true);
+  });
+
+  it("does not forward when the role is host", () => {
+    expect(
+      canForwardGuestClick({ ...connectedGuest, role: "host" }, 3, 5),
+    ).toBe(false);
+  });
+
+  it("does not forward when the role is unset", () => {
+    expect(
+      canForwardGuestClick({ ...connectedGuest, role: null }, 3, 5),
+    ).toBe(false);
+  });
+
+  it("does not forward when not connected", () => {
+    expect(
+      canForwardGuestClick(
+        { ...connectedGuest, connectionStatus: "disconnected" },
+        3,
+        5,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not forward when there is no session id", () => {
+    expect(
+      canForwardGuestClick({ ...connectedGuest, sessionId: null }, 3, 5),
+    ).toBe(false);
+    expect(
+      canForwardGuestClick({ ...connectedGuest, sessionId: "" }, 3, 5),
+    ).toBe(false);
+  });
+
+  it("does not forward an out-of-range or non-integer coordinate", () => {
+    expect(canForwardGuestClick(connectedGuest, 0, 5)).toBe(false);
+    expect(canForwardGuestClick(connectedGuest, 3, 10)).toBe(false);
+    expect(canForwardGuestClick(connectedGuest, 3.5, 5)).toBe(false);
   });
 });
 
