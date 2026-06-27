@@ -2,9 +2,13 @@
   "manifest_version": 3,
   "name": "Sudoku Coop",
   "version": "0.1.0",
-  "description": "Coordinate on SudokuPad puzzles in real time (scaffold only).",
+  "description": "Coordinate on SudokuPad puzzles in real time.",
   "permissions": ["storage", "tabs", "activeTab"],
-  "host_permissions": ["https://sudokupad.app/*"],
+  "host_permissions": [
+    "https://sudokupad.app/*",
+    "ws://localhost:8000/*",
+    "http://localhost:8000/*"
+  ],
   "action": {
     "default_popup": "index.html",
     "default_title": "Sudoku Coop"
