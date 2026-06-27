@@ -232,15 +232,52 @@ async function forwardHighlight(
     payload,
   };
 
+  const tabId = await findSudokuPadTabId();
+  if (tabId === null) {
+    setState({ error: "No SudokuPad tab found to display the highlight." });
+    return;
+  }
+
   try {
-    const tabId = await findSudokuPadTabId();
-    if (tabId === null) {
-      setState({ error: "No SudokuPad tab found to display the highlight." });
-      return;
-    }
     await chrome.tabs.sendMessage(tabId, message);
+    setState({ error: null });
+    return;
   } catch {
-    setState({ error: "Could not deliver highlight to the SudokuPad tab." });
+    // The content script may not be running in this tab — typically because the
+    // page was opened before the extension loaded, or the extension was reloaded
+    // (which invalidates the previously injected content script). Inject it
+    // on demand and retry once before giving up.
+  }
+
+  const injected = await injectContentScript(tabId);
+  if (!injected) {
+    setState({
+      error: "Could not load the overlay on the SudokuPad tab. Reload the page.",
+    });
+    return;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+    setState({ error: null });
+  } catch {
+    setState({
+      error:
+        "Could not deliver highlight to the SudokuPad tab. Reload the page.",
+    });
+  }
+}
+
+/** Inject the built content script into a tab on demand. Returns success. */
+async function injectContentScript(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 

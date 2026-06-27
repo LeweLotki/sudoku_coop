@@ -2,15 +2,19 @@
 
 Manifest V3 browser extension for real-time SudokuPad coordination.
 
-This change (`extension-core-connection`) implements the extension's **core
-connection layer**: popup UI, role selection, a background WebSocket client, and
-message passing between popup, background service worker, and content script.
+The extension's **core connection layer** (`extension-core-connection`) provides
+the popup UI, role selection, a background WebSocket client, and message passing
+between popup, background service worker, and content script. The
+**host grid overlay** (`host-grid-overlay`) builds on it: the SudokuPad content
+script now detects the on-page grid and draws a visible highlight over the cell a
+guest selects.
 
-> **Known limitations (this change):**
+> **Known limitations:**
 >
-> - The content script only **logs** received highlight coordinates to the page
->   console. Real grid detection and a visible overlay arrive in the later
->   `host-grid-overlay` change.
+> - Only **9×9** Sudoku grids are supported.
+> - The highlight is purely visual: the extension draws its own DOM overlay and
+>   never reads or modifies SudokuPad's internal state (no digit-writing, no
+>   move simulation).
 > - The guest row/column UI is intentionally simple; the polished coordinate
 >   modal is a later change.
 > - There is no automatic reconnection yet (deferred to `end-to-end-polish`).
@@ -96,13 +100,32 @@ popups talking to the same backend.
 5. **Guest:** open the popup → select **Guest** → enter the session code →
    click **Join** → confirm the joined status.
 6. **Guest:** enter row `3` and column `5` → click **Send Highlight**.
-7. **Verify:**
-   - the guest popup shows no error,
-   - the host's background forwards the event to the SudokuPad content script,
-   - the SudokuPad page console logs `Received highlight for row 3, column 5`.
+7. **Verify on the host's SudokuPad page:**
+   - a cyan highlight appears over row 3, column 5 and fades after ~2.5s,
+   - the highlight does **not** block clicking SudokuPad cells (pointer-through),
+   - the page console logs `[Sudoku Coop]` messages (grid detected, highlight
+     received, highlight rendered).
 
-This change is successful even though no visible cell highlight appears yet —
-the visible overlay belongs to the next change (`host-grid-overlay`).
+### Additional checks
+
+- Send row `1` / column `1` → top-left cell highlights; row `9` / column `9` →
+  bottom-right cell highlights.
+- Resize the window or scroll, then send another highlight → it stays aligned.
+- Send an out-of-range value (e.g. row `10`) → the host logs a warning and draws
+  nothing.
+
+### Debug helper (manual testing without a guest)
+
+The content script exposes a development helper on the SudokuPad page. Open the
+page console and run:
+
+```js
+__sudokuCoopDebugHighlight(3, 5); // row, column (1-based, 1–9)
+```
+
+It runs the same detect-and-render path used for real highlight events, so you
+can verify the overlay without a second profile. It is read-only with respect to
+SudokuPad and is intended for manual testing only.
 
 ## Project layout
 
@@ -114,7 +137,8 @@ extension/
 ├── scripts/postbuild.mjs
 └── src/
     ├── popup/      # Popup, HostPanel, GuestPanel, api.ts
-    ├── content/    # content.ts (placeholder handler), gridDetector.ts, overlay.ts
+    ├── content/    # content.ts (overlay orchestration), gridDetector.ts,
+    │               #   overlay.ts, geometry.ts (pure math), debounce.ts
     ├── background/ # serviceWorker.ts (WebSocket client + coordination)
     └── shared/     # config.ts, types.ts, messages.ts, validation.ts, parseBackendMessage.ts
 ```

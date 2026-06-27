@@ -3,7 +3,7 @@
   "name": "Sudoku Coop",
   "version": "0.1.0",
   "description": "Coordinate on SudokuPad puzzles in real time.",
-  "permissions": ["storage", "tabs", "activeTab"],
+  "permissions": ["storage", "tabs", "activeTab", "scripting"],
   "host_permissions": [
     "https://sudokupad.app/*",
     "ws://localhost:8000/*",
