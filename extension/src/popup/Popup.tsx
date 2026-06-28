@@ -63,6 +63,16 @@ export function Popup() {
     if (next) setState(next);
   };
 
+  const inSession =
+    state.role !== null &&
+    (state.sessionId !== null ||
+      state.connectionStatus === "connecting" ||
+      state.connectionStatus === "connected");
+
+  const hostLocked = inSession && state.role === "guest";
+  const guestLocked = inSession && state.role === "host";
+  const lockHint = "Leave current session to change role.";
+
   return (
     <div className="p-4 text-sm">
       <header className="mb-3 flex items-center justify-between">
@@ -77,28 +87,38 @@ export function Popup() {
       </header>
 
       <div className="mb-4 flex gap-2" role="group" aria-label="Select role">
-        <button
-          type="button"
-          className={`flex-1 rounded border px-3 py-1 ${
-            state.role === "host" ? "border-blue-500 bg-blue-50 font-medium" : ""
-          }`}
-          aria-pressed={state.role === "host"}
-          onClick={() => void selectRole("host")}
-        >
-          Host
-        </button>
-        <button
-          type="button"
-          className={`flex-1 rounded border px-3 py-1 ${
-            state.role === "guest"
-              ? "border-blue-500 bg-blue-50 font-medium"
-              : ""
-          }`}
-          aria-pressed={state.role === "guest"}
-          onClick={() => void selectRole("guest")}
-        >
-          Guest
-        </button>
+        <span className="flex-1" title={hostLocked ? lockHint : undefined}>
+          <button
+            type="button"
+            className={`w-full rounded border px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
+              state.role === "host"
+                ? "border-blue-500 bg-blue-50 font-medium"
+                : ""
+            }`}
+            aria-pressed={state.role === "host"}
+            disabled={hostLocked}
+            title={hostLocked ? lockHint : undefined}
+            onClick={() => void selectRole("host")}
+          >
+            Host
+          </button>
+        </span>
+        <span className="flex-1" title={guestLocked ? lockHint : undefined}>
+          <button
+            type="button"
+            className={`w-full rounded border px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50 ${
+              state.role === "guest"
+                ? "border-blue-500 bg-blue-50 font-medium"
+                : ""
+            }`}
+            aria-pressed={state.role === "guest"}
+            disabled={guestLocked}
+            title={guestLocked ? lockHint : undefined}
+            onClick={() => void selectRole("guest")}
+          >
+            Guest
+          </button>
+        </span>
       </div>
 
       {state.error ? (

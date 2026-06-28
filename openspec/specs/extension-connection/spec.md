@@ -17,6 +17,12 @@ The extension popup SHALL allow the user to choose between Host and Guest mode, 
 - **AND** the Guest panel SHALL NOT contain row, column, or manual Send Highlight controls
 - **AND** the selected role SHALL be recorded in extension state
 
+#### Scenario: Role locked while in an active session
+- **WHEN** the user is in an active session (role set with a session code, or connecting/connected)
+- **THEN** the popup SHALL disable (grey out) the role button for the other role
+- **AND** hovering over the disabled role button SHALL show a hint such as "Leave current session to change role."
+- **AND** the user SHALL only be able to change role after closing or leaving the current session
+
 ### Requirement: Host Create-Session Flow
 The extension SHALL let a host create a session by opening or reusing a single WebSocket connection to the backend and exchanging the create/created events.
 
@@ -26,6 +32,12 @@ The extension SHALL let a host create a session by opening or reusing a single W
 - **AND** it SHALL send `{ "type": "session:create", "role": "host" }`
 - **AND** upon receiving `{ "type": "session:created", "sessionId": "<code>" }` it SHALL set role to host and store the session code
 - **AND** the popup SHALL display the returned session code
+
+#### Scenario: Host copies the session code
+- **WHEN** a session code is displayed in the Host panel
+- **THEN** the popup SHALL show a copy button with a copy icon to the right of the code
+- **AND** clicking it SHALL copy the session code to the clipboard without requiring the user to manually select the text
+- **AND** the button SHALL give brief visual feedback that the code was copied
 
 ### Requirement: Guest Join-Session Flow
 The extension SHALL let a guest join an existing session using a session code by opening or reusing a single WebSocket connection to the backend.

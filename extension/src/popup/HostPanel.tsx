@@ -9,9 +9,21 @@ interface HostPanelProps {
 
 export function HostPanel({ state, onState }: HostPanelProps) {
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const isConnected =
     state.connectionStatus === "connected" || state.sessionId !== null;
+
+  const copyCode = async () => {
+    if (!state.sessionId) return;
+    try {
+      await navigator.clipboard.writeText(state.sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const createSession = async () => {
     setBusy(true);
@@ -34,9 +46,49 @@ export function HostPanel({ state, onState }: HostPanelProps) {
       {state.sessionId ? (
         <div className="mb-3">
           <p className="text-xs text-gray-500">Session code</p>
-          <p className="font-mono text-lg font-semibold tracking-widest">
-            {state.sessionId}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-lg font-semibold tracking-widest">
+              {state.sessionId}
+            </p>
+            <button
+              type="button"
+              className="rounded border p-1 text-gray-600 hover:bg-gray-100"
+              onClick={() => void copyCode()}
+              title={copied ? "Copied!" : "Copy code"}
+              aria-label="Copy session code"
+            >
+              {copied ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M13.5 4.5 6 12 2.5 8.5" />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+                  <path d="M10.5 5.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5" />
+                </svg>
+              )}
+            </button>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
             Share this code with a guest to let them join.
           </p>
