@@ -22,7 +22,7 @@ the background forwards the existing `cell:highlight` event to the host.
 >   SudokuPad puzzle URL. If they open different puzzles, the clicked coordinate
 >   is still sent and highlighted, but it may refer to a different puzzle
 >   context. There is no automatic puzzle-URL matching.
-> - There is no automatic reconnection yet (deferred to `end-to-end-polish`).
+> - There is no automatic WebSocket reconnection/backoff yet.
 
 ## Tech stack
 

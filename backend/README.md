@@ -134,15 +134,6 @@ Settings load from the environment and an optional `.env` file (see
 | `MAX_ACTIVE_SESSIONS` | `50` | Global active-session cap |
 | `MAX_GUESTS_PER_SESSION` | `5` | Guests per session cap |
 
-### Security model
-
-The access token is an **invite token, not a true secret**: it keeps random
-internet users off the endpoint, and it ends up bundled into the distributed
-extension zip (readable by anyone with the zip). Treat it accordingly — serve
-production over `wss://` and **rotate the Heroku `ACCESS_TOKEN` (and rebuild the
-extension) if the zip leaks**. Security-relevant events are logged at a high
-level only; the token value and full raw message bodies are never logged.
-
 ### Heroku deployment (one dyno)
 
 Sessions live entirely in-memory in a single process, so deploy with **exactly
@@ -187,6 +178,10 @@ backend/
     ├── conftest.py
     ├── test_session_codes.py
     ├── test_session_service.py
+    ├── test_session_expiration.py
     ├── test_validation.py
-    └── test_websocket.py
+    ├── test_websocket.py
+    ├── test_ws_auth.py          # token + origin gate
+    ├── test_security.py         # security helpers
+    └── test_limits.py           # rate/size/capacity limits
 ```
